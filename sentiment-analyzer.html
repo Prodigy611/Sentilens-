@@ -1,0 +1,1033 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>SentimentLens — Real-Time Text Analysis</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Inter:wght@300;400;500&display=swap" rel="stylesheet" />
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #080D1A;
+    --surface: #0F1729;
+    --surface2: #151E35;
+    --border: rgba(99,102,241,0.18);
+    --accent: #6366F1;
+    --accent-soft: rgba(99,102,241,0.15);
+    --lavender: #A5B4FC;
+    --text: #F0F4FF;
+    --muted: #6B7A99;
+    --positive: #22D3A5;
+    --positive-soft: rgba(34,211,165,0.12);
+    --negative: #F43F6E;
+    --negative-soft: rgba(244,63,110,0.12);
+    --neutral: #FACC15;
+    --neutral-soft: rgba(250,204,21,0.12);
+  }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Inter', sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* ── Background grid ── */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(99,102,241,0.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(99,102,241,0.04) 1px, transparent 1px);
+    background-size: 48px 48px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* ── Header ── */
+  header {
+    position: relative;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1.25rem 2.5rem;
+    border-bottom: 1px solid var(--border);
+    backdrop-filter: blur(12px);
+    background: rgba(8,13,26,0.8);
+  }
+
+  .logo {
+    font-family: 'Space Grotesk', sans-serif;
+    font-weight: 700;
+    font-size: 1.15rem;
+    letter-spacing: -0.02em;
+    color: var(--text);
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+  }
+
+  .logo-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 8px var(--accent);
+    animation: pulse-dot 2s ease-in-out infinite;
+  }
+
+  @keyframes pulse-dot {
+    0%, 100% { box-shadow: 0 0 6px var(--accent); }
+    50% { box-shadow: 0 0 16px var(--accent), 0 0 30px rgba(99,102,241,0.4); }
+  }
+
+  .badge {
+    font-size: 0.7rem;
+    font-weight: 500;
+    color: var(--lavender);
+    background: var(--accent-soft);
+    border: 1px solid rgba(99,102,241,0.3);
+    border-radius: 20px;
+    padding: 0.25rem 0.75rem;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+  }
+
+  /* ── Hero ── */
+  .hero {
+    position: relative;
+    z-index: 5;
+    text-align: center;
+    padding: 4rem 2rem 2rem;
+  }
+
+  .hero-eyebrow {
+    font-size: 0.75rem;
+    font-weight: 500;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--lavender);
+    margin-bottom: 1.2rem;
+  }
+
+  .hero h1 {
+    font-family: 'Space Grotesk', sans-serif;
+    font-weight: 700;
+    font-size: clamp(2.2rem, 5vw, 3.5rem);
+    letter-spacing: -0.03em;
+    line-height: 1.05;
+    color: var(--text);
+    margin-bottom: 1rem;
+  }
+
+  .hero h1 em {
+    font-style: normal;
+    background: linear-gradient(135deg, var(--accent) 0%, var(--lavender) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .hero p {
+    color: var(--muted);
+    font-size: 1.05rem;
+    max-width: 480px;
+    margin: 0 auto 2.5rem;
+    line-height: 1.7;
+  }
+
+  /* ── Main layout ── */
+  .workspace {
+    position: relative;
+    z-index: 5;
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 0 1.5rem 4rem;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+    align-items: start;
+  }
+
+  @media (max-width: 768px) {
+    .workspace { grid-template-columns: 1fr; }
+    header { padding: 1rem 1.25rem; }
+    .hero { padding: 2.5rem 1.25rem 1.5rem; }
+  }
+
+  /* ── Card base ── */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    overflow: hidden;
+  }
+
+  .card-header {
+    padding: 1.25rem 1.5rem;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+  }
+
+  .card-icon {
+    width: 28px; height: 28px;
+    border-radius: 8px;
+    background: var(--accent-soft);
+    border: 1px solid rgba(99,102,241,0.25);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.85rem;
+  }
+
+  .card-title {
+    font-family: 'Space Grotesk', sans-serif;
+    font-weight: 600;
+    font-size: 0.9rem;
+    color: var(--text);
+  }
+
+  .card-body { padding: 1.5rem; }
+
+  /* ── Input card ── */
+  .textarea-wrap {
+    position: relative;
+    margin-bottom: 1rem;
+  }
+
+  textarea {
+    width: 100%;
+    min-height: 160px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    color: var(--text);
+    font-family: 'Inter', sans-serif;
+    font-size: 0.95rem;
+    line-height: 1.6;
+    padding: 1rem;
+    resize: vertical;
+    transition: border-color 0.2s;
+    outline: none;
+  }
+
+  textarea::placeholder { color: var(--muted); }
+
+  textarea:focus {
+    border-color: rgba(99,102,241,0.5);
+    box-shadow: 0 0 0 3px rgba(99,102,241,0.08);
+  }
+
+  .char-count {
+    position: absolute;
+    bottom: 10px; right: 12px;
+    font-size: 0.72rem;
+    color: var(--muted);
+    pointer-events: none;
+  }
+
+  /* ── Sample chips ── */
+  .samples-label {
+    font-size: 0.72rem;
+    font-weight: 500;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 0.6rem;
+  }
+
+  .samples {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-bottom: 1.25rem;
+  }
+
+  .chip {
+    font-size: 0.8rem;
+    color: var(--lavender);
+    background: var(--accent-soft);
+    border: 1px solid rgba(99,102,241,0.2);
+    border-radius: 20px;
+    padding: 0.3rem 0.75rem;
+    cursor: pointer;
+    transition: all 0.15s;
+    font-family: 'Inter', sans-serif;
+    white-space: nowrap;
+  }
+
+  .chip:hover {
+    background: rgba(99,102,241,0.25);
+    border-color: rgba(99,102,241,0.45);
+    color: var(--text);
+  }
+
+  /* ── Analyze button ── */
+  .btn-analyze {
+    width: 100%;
+    padding: 0.9rem;
+    background: linear-gradient(135deg, #5B5CF6 0%, #818CF8 100%);
+    border: none;
+    border-radius: 12px;
+    color: #fff;
+    font-family: 'Space Grotesk', sans-serif;
+    font-weight: 600;
+    font-size: 0.95rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    letter-spacing: 0.01em;
+  }
+
+  .btn-analyze:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 8px 24px rgba(99,102,241,0.4);
+  }
+
+  .btn-analyze:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+    transform: none;
+  }
+
+  .spinner {
+    width: 16px; height: 16px;
+    border: 2px solid rgba(255,255,255,0.3);
+    border-top-color: #fff;
+    border-radius: 50%;
+    animation: spin 0.6s linear infinite;
+    display: none;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── Result card ── */
+  .result-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+    padding: 3rem 1.5rem;
+    color: var(--muted);
+    text-align: center;
+  }
+
+  .result-empty-icon {
+    font-size: 2.5rem;
+    opacity: 0.35;
+  }
+
+  .result-empty p { font-size: 0.88rem; line-height: 1.6; }
+
+  /* ── Sentiment meter ── */
+  .sentiment-result { display: none; }
+
+  .sentiment-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 1.75rem;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+  }
+
+  .sentiment-verdict {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  .verdict-icon {
+    width: 52px; height: 52px;
+    border-radius: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.6rem;
+    transition: all 0.4s;
+  }
+
+  .verdict-label {
+    font-family: 'Space Grotesk', sans-serif;
+  }
+
+  .verdict-label .verdict-name {
+    font-size: 1.5rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    transition: color 0.4s;
+  }
+
+  .verdict-label .verdict-sub {
+    font-size: 0.78rem;
+    color: var(--muted);
+    margin-top: 0.1rem;
+  }
+
+  .confidence-badge {
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 1.1rem;
+    font-weight: 600;
+    padding: 0.35rem 0.85rem;
+    border-radius: 10px;
+    transition: all 0.4s;
+  }
+
+  /* ── Meter arc ── */
+  .meter-wrap {
+    position: relative;
+    margin: 0 auto 1.75rem;
+    width: 200px;
+  }
+
+  .meter-svg { width: 100%; }
+
+  .meter-track {
+    fill: none;
+    stroke: var(--surface2);
+    stroke-width: 12;
+    stroke-linecap: round;
+  }
+
+  .meter-fill {
+    fill: none;
+    stroke-width: 12;
+    stroke-linecap: round;
+    transition: stroke-dashoffset 0.8s cubic-bezier(0.34,1.56,0.64,1), stroke 0.4s;
+  }
+
+  .meter-center {
+    text-align: center;
+    position: absolute;
+    top: 55%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+  }
+
+  .meter-pct {
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 2rem;
+    font-weight: 700;
+    letter-spacing: -0.03em;
+    transition: color 0.4s;
+  }
+
+  .meter-sublabel {
+    font-size: 0.7rem;
+    color: var(--muted);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  /* ── Score bars ── */
+  .scores { margin-bottom: 1.5rem; }
+
+  .score-row {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 0.65rem;
+  }
+
+  .score-label {
+    font-size: 0.78rem;
+    font-weight: 500;
+    width: 62px;
+    flex-shrink: 0;
+    color: var(--muted);
+  }
+
+  .score-bar-bg {
+    flex: 1;
+    height: 6px;
+    border-radius: 6px;
+    background: var(--surface2);
+    overflow: hidden;
+  }
+
+  .score-bar-fill {
+    height: 100%;
+    border-radius: 6px;
+    width: 0%;
+    transition: width 0.7s cubic-bezier(0.34,1.2,0.64,1);
+  }
+
+  .score-bar-fill.positive { background: var(--positive); }
+  .score-bar-fill.negative { background: var(--negative); }
+  .score-bar-fill.neutral  { background: var(--neutral); }
+
+  .score-pct {
+    font-size: 0.78rem;
+    font-weight: 500;
+    width: 36px;
+    text-align: right;
+    color: var(--muted);
+    font-family: 'Space Grotesk', sans-serif;
+  }
+
+  /* ── Token highlights ── */
+  .token-section { margin-top: 1.25rem; }
+
+  .token-label {
+    font-size: 0.72rem;
+    font-weight: 500;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 0.6rem;
+  }
+
+  .token-text {
+    font-size: 0.9rem;
+    line-height: 1.9;
+    color: var(--text);
+  }
+
+  .tok-pos {
+    background: var(--positive-soft);
+    color: var(--positive);
+    border-radius: 4px;
+    padding: 0.05em 0.3em;
+    font-weight: 500;
+  }
+
+  .tok-neg {
+    background: var(--negative-soft);
+    color: var(--negative);
+    border-radius: 4px;
+    padding: 0.05em 0.3em;
+    font-weight: 500;
+  }
+
+  /* ── History ── */
+  .history-section {
+    position: relative;
+    z-index: 5;
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 0 1.5rem 5rem;
+  }
+
+  .history-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 1rem;
+  }
+
+  .section-title {
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--muted);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .clear-btn {
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    border-radius: 8px;
+    padding: 0.3rem 0.75rem;
+    font-size: 0.78rem;
+    cursor: pointer;
+    font-family: 'Inter', sans-serif;
+    transition: all 0.15s;
+    display: none;
+  }
+
+  .clear-btn:hover { color: var(--text); border-color: rgba(99,102,241,0.4); }
+
+  .history-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 1rem;
+  }
+
+  .history-empty {
+    color: var(--muted);
+    font-size: 0.85rem;
+    text-align: center;
+    padding: 2rem;
+    border: 1px dashed var(--border);
+    border-radius: 12px;
+  }
+
+  .history-item {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1rem 1.2rem;
+    cursor: pointer;
+    transition: all 0.15s;
+    animation: fadeUp 0.3s ease;
+  }
+
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(8px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  .history-item:hover { border-color: rgba(99,102,241,0.35); background: var(--surface2); }
+
+  .history-item-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 0.5rem;
+  }
+
+  .history-sentiment {
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    padding: 0.2rem 0.6rem;
+    border-radius: 6px;
+  }
+
+  .history-sentiment.positive { background: var(--positive-soft); color: var(--positive); }
+  .history-sentiment.negative { background: var(--negative-soft); color: var(--negative); }
+  .history-sentiment.neutral  { background: var(--neutral-soft);  color: var(--neutral); }
+
+  .history-conf {
+    font-size: 0.75rem;
+    color: var(--muted);
+    font-family: 'Space Grotesk', sans-serif;
+  }
+
+  .history-text {
+    font-size: 0.83rem;
+    color: var(--muted);
+    line-height: 1.5;
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+  }
+
+  /* ── Loading skeleton ── */
+  .skeleton {
+    background: linear-gradient(90deg, var(--surface2) 25%, rgba(99,102,241,0.07) 50%, var(--surface2) 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.2s infinite;
+    border-radius: 8px;
+    height: 14px;
+    margin-bottom: 0.6rem;
+  }
+
+  @keyframes shimmer {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+  }
+
+  .loading-state { display: none; padding: 1.5rem; }
+
+  /* state management */
+  .state-loading .loading-state { display: block; }
+  .state-loading .result-empty  { display: none; }
+  .state-loading .sentiment-result { display: none; }
+
+  .state-result .loading-state  { display: none; }
+  .state-result .result-empty   { display: none; }
+  .state-result .sentiment-result { display: block; padding: 1.5rem; }
+
+  /* ── Footer ── */
+  footer {
+    position: relative; z-index: 5;
+    text-align: center;
+    padding: 1.5rem;
+    border-top: 1px solid var(--border);
+    color: var(--muted);
+    font-size: 0.78rem;
+  }
+
+  footer span { color: var(--lavender); }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-dot"></div>
+    SentimentLens
+  </div>
+  <div class="badge">AI Powered</div>
+</header>
+
+<section class="hero">
+  <p class="hero-eyebrow">Real-Time NLP Analysis</p>
+  <h1>Understand how text<br/><em>feels</em></h1>
+  <p>Paste any tweet, review, or comment. Our AI instantly reads the emotional tone — positive, negative, or neutral — with confidence scores and key word highlights.</p>
+</section>
+
+<main class="workspace">
+
+  <!-- INPUT CARD -->
+  <div class="card">
+    <div class="card-header">
+      <div class="card-icon">✍️</div>
+      <span class="card-title">Enter Text</span>
+    </div>
+    <div class="card-body">
+      <div class="textarea-wrap">
+        <textarea id="inputText" placeholder="Paste a tweet, product review, or any text you want to analyze…" maxlength="1200"></textarea>
+        <span class="char-count" id="charCount">0 / 1200</span>
+      </div>
+
+      <div class="samples-label">Try a sample</div>
+      <div class="samples" id="sampleChips"></div>
+
+      <button class="btn-analyze" id="analyzeBtn" onclick="runAnalysis()">
+        <div class="spinner" id="spinner"></div>
+        <span id="btnText">Analyze Sentiment</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- RESULT CARD -->
+  <div class="card" id="resultCard">
+    <div class="card-header">
+      <div class="card-icon">📊</div>
+      <span class="card-title">Analysis Result</span>
+    </div>
+
+    <!-- Empty state -->
+    <div class="result-empty">
+      <div class="result-empty-icon">🔍</div>
+      <p>Your analysis will appear here.<br/>Enter some text and press <strong>Analyze</strong>.</p>
+    </div>
+
+    <!-- Loading skeleton -->
+    <div class="loading-state">
+      <div class="skeleton" style="width:60%;height:18px;margin-bottom:1.2rem"></div>
+      <div class="skeleton" style="width:100%;height:180px;border-radius:12px;margin-bottom:1.2rem"></div>
+      <div class="skeleton" style="width:100%;height:8px"></div>
+      <div class="skeleton" style="width:85%;height:8px"></div>
+      <div class="skeleton" style="width:70%;height:8px"></div>
+    </div>
+
+    <!-- Result -->
+    <div class="sentiment-result" id="sentimentResult">
+      <div class="sentiment-header">
+        <div class="sentiment-verdict">
+          <div class="verdict-icon" id="verdictIcon">😊</div>
+          <div class="verdict-label">
+            <div class="verdict-name" id="verdictName">Positive</div>
+            <div class="verdict-sub">Overall sentiment</div>
+          </div>
+        </div>
+        <div class="confidence-badge" id="confBadge">92%</div>
+      </div>
+
+      <!-- Arc meter -->
+      <div class="meter-wrap">
+        <svg class="meter-svg" viewBox="0 0 200 120" xmlns="http://www.w3.org/2000/svg">
+          <path class="meter-track"
+            d="M 20 105 A 80 80 0 0 1 180 105"
+            stroke-dasharray="252" stroke-dashoffset="0" />
+          <path class="meter-fill" id="meterFill"
+            d="M 20 105 A 80 80 0 0 1 180 105"
+            stroke="#6366F1"
+            stroke-dasharray="252" stroke-dashoffset="252" />
+          <circle cx="20" cy="105" r="4" fill="var(--negative)" />
+          <circle cx="100" cy="25" r="4" fill="var(--neutral)" />
+          <circle cx="180" cy="105" r="4" fill="var(--positive)" />
+          <text x="14" y="118" fill="var(--negative)" font-size="9" font-family="Space Grotesk" font-weight="600">NEG</text>
+          <text x="80" y="18"  fill="var(--neutral)"  font-size="9" font-family="Space Grotesk" font-weight="600">NEU</text>
+          <text x="163" y="118" fill="var(--positive)" font-size="9" font-family="Space Grotesk" font-weight="600">POS</text>
+        </svg>
+        <div class="meter-center">
+          <div class="meter-pct" id="meterPct">—</div>
+          <div class="meter-sublabel">confidence</div>
+        </div>
+      </div>
+
+      <!-- Score bars -->
+      <div class="scores">
+        <div class="score-row">
+          <div class="score-label">Positive</div>
+          <div class="score-bar-bg"><div class="score-bar-fill positive" id="barPos"></div></div>
+          <div class="score-pct" id="pctPos">0%</div>
+        </div>
+        <div class="score-row">
+          <div class="score-label">Negative</div>
+          <div class="score-bar-bg"><div class="score-bar-fill negative" id="barNeg"></div></div>
+          <div class="score-pct" id="pctNeg">0%</div>
+        </div>
+        <div class="score-row">
+          <div class="score-label">Neutral</div>
+          <div class="score-bar-bg"><div class="score-bar-fill neutral" id="barNeu"></div></div>
+          <div class="score-pct" id="pctNeu">0%</div>
+        </div>
+      </div>
+
+      <!-- Key words -->
+      <div class="token-section">
+        <div class="token-label">Key Signal Words</div>
+        <div class="token-text" id="tokenText"></div>
+      </div>
+    </div>
+  </div>
+
+</main>
+
+<!-- HISTORY -->
+<section class="history-section">
+  <div class="history-header">
+    <div class="section-title">Recent Analyses</div>
+    <button class="clear-btn" id="clearBtn" onclick="clearHistory()">Clear all</button>
+  </div>
+  <div id="historyGrid">
+    <div class="history-empty">No analyses yet — try the samples above!</div>
+  </div>
+</section>
+
+<footer>
+  Built with <span>SentimentLens</span> · Powered by Claude AI · Real-time NLP
+</footer>
+
+<script>
+const SAMPLES = [
+  { label: "⭐ Great product", text: "Absolutely love this product! The quality exceeded my expectations and it arrived faster than promised. Will definitely buy again — highly recommend to everyone!" },
+  { label: "😤 Bad service", text: "Terrible customer service. Waited 45 minutes on hold just to be hung up on. The product broke after two days and they refused to refund me. Never buying from this company again." },
+  { label: "🐦 Happy tweet", text: "Just got back from the most amazing trip to Japan 🇯🇵 The food, the people, the culture — everything was absolutely breathtaking. Can't wait to go back!" },
+  { label: "😐 Mixed review", text: "The laptop has decent performance and looks nice, but the battery life is disappointing and it runs hot under load. It's okay for the price, nothing special." },
+  { label: "💬 Complaint", text: "Why does this app keep crashing every time I try to upload photos?? I've reinstalled it three times and nothing works. This is so frustrating and a complete waste of time." },
+  { label: "🌟 5-star review", text: "This restaurant is a hidden gem! The pasta was perfectly cooked, the service was warm and attentive, and the atmosphere was cozy. Best meal I've had in years." },
+];
+
+const history = [];
+
+// Build sample chips
+const chipsEl = document.getElementById('sampleChips');
+SAMPLES.forEach(s => {
+  const chip = document.createElement('button');
+  chip.className = 'chip';
+  chip.textContent = s.label;
+  chip.onclick = () => {
+    document.getElementById('inputText').value = s.text;
+    updateCharCount();
+  };
+  chipsEl.appendChild(chip);
+});
+
+// Char count
+const inputEl = document.getElementById('inputText');
+inputEl.addEventListener('input', updateCharCount);
+function updateCharCount() {
+  document.getElementById('charCount').textContent = `${inputEl.value.length} / 1200`;
+}
+
+// State management
+function setCardState(state) {
+  const card = document.getElementById('resultCard');
+  card.className = 'card state-' + state;
+}
+
+// Main analysis
+async function runAnalysis() {
+  const text = document.getElementById('inputText').value.trim();
+  if (!text) {
+    inputEl.focus();
+    return;
+  }
+
+  const btn = document.getElementById('analyzeBtn');
+  const spinner = document.getElementById('spinner');
+  const btnText = document.getElementById('btnText');
+
+  btn.disabled = true;
+  spinner.style.display = 'block';
+  btnText.textContent = 'Analyzing…';
+  setCardState('loading');
+
+  try {
+    const prompt = `You are a sentiment analysis engine. Analyze the sentiment of the following text and respond ONLY with a valid JSON object (no markdown, no explanation):
+
+Text: "${text.replace(/"/g, '\\"')}"
+
+Respond with exactly this JSON structure:
+{
+  "sentiment": "positive" | "negative" | "neutral",
+  "confidence": <number 0-100>,
+  "scores": {
+    "positive": <number 0-100>,
+    "negative": <number 0-100>,
+    "neutral": <number 0-100>
+  },
+  "positiveWords": ["word1", "word2"],
+  "negativeWords": ["word1", "word2"],
+  "summary": "<one sentence explanation>"
+}
+
+Rules:
+- scores.positive + scores.negative + scores.neutral must sum to 100
+- confidence is the score of the dominant sentiment
+- Extract up to 5 key positive signal words and 5 key negative signal words from the actual text
+- Be accurate and nuanced`;
+
+    const response = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-6",
+        max_tokens: 1000,
+        messages: [{ role: "user", content: prompt }]
+      })
+    });
+
+    const data = await response.json();
+    const raw = data.content.map(b => b.text || '').join('');
+    const clean = raw.replace(/```json|```/g, '').trim();
+    const result = JSON.parse(clean);
+
+    displayResult(text, result);
+    addToHistory(text, result);
+
+  } catch (err) {
+    console.error(err);
+    setCardState('');
+    alert('Analysis failed. Please try again.');
+  } finally {
+    btn.disabled = false;
+    spinner.style.display = 'none';
+    btnText.textContent = 'Analyze Sentiment';
+  }
+}
+
+function displayResult(text, r) {
+  setCardState('result');
+
+  const sentiment = r.sentiment.toLowerCase();
+  const conf = Math.round(r.confidence);
+  const scores = r.scores;
+
+  // Colors & icons
+  const config = {
+    positive: { color: 'var(--positive)', bg: 'var(--positive-soft)', icon: '😊', meterColor: '#22D3A5' },
+    negative: { color: 'var(--negative)', bg: 'var(--negative-soft)', icon: '😠', meterColor: '#F43F6E' },
+    neutral:  { color: 'var(--neutral)',  bg: 'var(--neutral-soft)',  icon: '😐', meterColor: '#FACC15' },
+  };
+  const cfg = config[sentiment] || config.neutral;
+
+  // Verdict
+  document.getElementById('verdictIcon').textContent = cfg.icon;
+  document.getElementById('verdictIcon').style.background = cfg.bg;
+  document.getElementById('verdictName').textContent = sentiment.charAt(0).toUpperCase() + sentiment.slice(1);
+  document.getElementById('verdictName').style.color = cfg.color;
+
+  // Confidence badge
+  const badge = document.getElementById('confBadge');
+  badge.textContent = conf + '%';
+  badge.style.background = cfg.bg;
+  badge.style.color = cfg.color;
+
+  // Meter arc
+  // Arc total length = 252 (the half-circle)
+  // Needle moves from NEG (dashoffset=252=empty) → POS (dashoffset=0=full)
+  // We map the signed sentiment score: neg=0, neutral=0.5, pos=1
+  let meterPos;
+  if (sentiment === 'positive') meterPos = 0.5 + (conf / 200);
+  else if (sentiment === 'negative') meterPos = 0.5 - (conf / 200);
+  else meterPos = 0.5;
+  meterPos = Math.max(0.02, Math.min(0.98, meterPos));
+
+  const meterFill = document.getElementById('meterFill');
+  meterFill.style.strokeDashoffset = (252 * (1 - meterPos));
+  meterFill.style.stroke = cfg.meterColor;
+  document.getElementById('meterPct').textContent = conf + '%';
+  document.getElementById('meterPct').style.color = cfg.color;
+
+  // Bars
+  const s = r.scores;
+  setTimeout(() => {
+    document.getElementById('barPos').style.width = s.positive + '%';
+    document.getElementById('barNeg').style.width = s.negative + '%';
+    document.getElementById('barNeu').style.width = s.neutral + '%';
+  }, 50);
+  document.getElementById('pctPos').textContent = Math.round(s.positive) + '%';
+  document.getElementById('pctNeg').textContent = Math.round(s.negative) + '%';
+  document.getElementById('pctNeu').textContent = Math.round(s.neutral) + '%';
+
+  // Token highlights
+  const posWords = (r.positiveWords || []).map(w => w.toLowerCase());
+  const negWords = (r.negativeWords || []).map(w => w.toLowerCase());
+
+  const words = text.split(/(\s+)/);
+  const highlighted = words.map(word => {
+    const clean = word.replace(/[^a-zA-Z0-9']/g, '').toLowerCase();
+    if (posWords.includes(clean)) return `<span class="tok-pos">${word}</span>`;
+    if (negWords.includes(clean)) return `<span class="tok-neg">${word}</span>`;
+    return word;
+  }).join('');
+
+  document.getElementById('tokenText').innerHTML = highlighted;
+}
+
+function addToHistory(text, result) {
+  history.unshift({ text, result });
+  renderHistory();
+}
+
+function renderHistory() {
+  const grid = document.getElementById('historyGrid');
+  const clearBtn = document.getElementById('clearBtn');
+
+  if (history.length === 0) {
+    grid.innerHTML = '<div class="history-empty">No analyses yet — try the samples above!</div>';
+    clearBtn.style.display = 'none';
+    return;
+  }
+
+  clearBtn.style.display = 'inline-block';
+  grid.innerHTML = history.slice(0, 9).map((item, i) => {
+    const s = item.result.sentiment.toLowerCase();
+    const conf = Math.round(item.result.confidence);
+    const preview = item.text.length > 100 ? item.text.slice(0, 100) + '…' : item.text;
+    const icon = s === 'positive' ? '😊' : s === 'negative' ? '😠' : '😐';
+    return `
+      <div class="history-item" onclick="reloadHistory(${i})">
+        <div class="history-item-top">
+          <span class="history-sentiment ${s}">${icon} ${s}</span>
+          <span class="history-conf">${conf}% conf.</span>
+        </div>
+        <div class="history-text">${preview}</div>
+      </div>`;
+  }).join('');
+}
+
+function reloadHistory(i) {
+  const item = history[i];
+  document.getElementById('inputText').value = item.text;
+  updateCharCount();
+  displayResult(item.text, item.result);
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function clearHistory() {
+  history.length = 0;
+  renderHistory();
+}
+
+// Allow Ctrl+Enter to submit
+inputEl.addEventListener('keydown', e => {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') runAnalysis();
+});
+</script>
+</body>
+</html>
